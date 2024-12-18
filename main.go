@@ -55,10 +55,11 @@ var upgrader = websocket.Upgrader{
 
 func handleConnection(w http.ResponseWriter, r *http.Request) {
 	gameID := r.URL.Query().Get("gameID")
-	if gameID == "" {
-		http.Error(w, "gameID is required", http.StatusBadRequest)
-		return
-	}
+
+	//if exist := games[gameID]; exist == nil {
+	//	http.Error(w, "Room Not Found", http.StatusBadRequest)
+	//	return
+	//}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -66,11 +67,12 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-	connections[gameID] = append(connections[gameID], conn)
 
 	if _, exists := games[gameID]; !exists {
 		games[gameID] = &Game{ID: gameID, Status: "Waiting for Player"}
 	}
+
+	connections[gameID] = append(connections[gameID], conn)
 
 	err = conn.WriteJSON(games[gameID])
 	if err != nil {
@@ -169,9 +171,39 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func createRoom(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	roomId, _ := utils.GenerateRoomId()
+
+	for games[roomId] != nil {
+		roomId, _ = utils.GenerateRoomId()
+	}
+	games[roomId] = &Game{ID: roomId, Status: "Waiting for Player"}
+	_ = json.NewEncoder(w).Encode(map[string]string{"roomId": roomId})
+}
+
+func checkRoom(w http.ResponseWriter, r *http.Request) {
+	roomId := r.URL.Query().Get("roomId")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	if games[roomId] == nil {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "Room Not Found"})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "Room Found"})
+
+}
+
 func main() {
 
 	http.HandleFunc("/game", handleConnection)
+	http.HandleFunc("/create-room", createRoom)
+	http.HandleFunc("/check-room", checkRoom)
 
 	log.Println("Starting WebSocket server on port 4296")
 	err := http.ListenAndServe(":4296", nil)
