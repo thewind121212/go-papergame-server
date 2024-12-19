@@ -61,12 +61,29 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
+	//refject upgrade if room not found
+
+	if _, exists := games[gameID]; !exists {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "Room Not Found"})
+		return
+	}
+
+	//if socker > 2 then reject upgrade
+
+	if len(connections[gameID])+1 > 2 {
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "Game Full"})
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Error upgrading connection:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		removeConnection(gameID, conn)
+	}()
 
 	if _, exists := games[gameID]; !exists {
 		games[gameID] = &Game{ID: gameID, Status: "Waiting for Player"}
@@ -126,12 +143,16 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 
 			}
 
-			randomNumber := rand.Intn(101)
-			if randomNumber > 50 {
-				games[msgJSON.GameID].PlayerTurn = "P1"
-			} else {
-				games[msgJSON.GameID].PlayerTurn = "P2"
+			if games[msgJSON.GameID].PlayerTurn == "" {
+				randomNumber := rand.Intn(101)
+				fmt.Println("Random Number: ", randomNumber)
+				if randomNumber > 50 {
+					games[msgJSON.GameID].PlayerTurn = "P1"
+				} else {
+					games[msgJSON.GameID].PlayerTurn = "P2"
+				}
 			}
+
 			//decide who goes first
 			games[msgJSON.GameID].Grid = grid
 			games[msgJSON.GameID].Status = "Game Start"
@@ -146,7 +167,12 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			row, col, _ := utils.SplitString(de)
 
 			//assign the interact grid
-			games[msgJSON.GameID].InteractGrid[row-1][col-1] = "0"
+			games[msgJSON.GameID].InteractGrid[row-1][col-1] = games[msgJSON.GameID].PlayerTurn
+			if games[msgJSON.GameID].PlayerTurn == "P1" {
+				games[msgJSON.GameID].PlayerTurn = "P2"
+			} else {
+				games[msgJSON.GameID].PlayerTurn = "P1"
+			}
 
 			fmt.Println("Interact Grid: ", games[msgJSON.GameID].InteractGrid[row-1][col-1])
 
@@ -209,5 +235,16 @@ func main() {
 	err := http.ListenAndServe(":4296", nil)
 	if err != nil {
 		log.Fatal("Error starting server:", err)
+	}
+}
+
+func removeConnection(gameID string, conn *websocket.Conn) {
+	if conns, ok := connections[gameID]; ok {
+		for i, clientConn := range conns {
+			if clientConn == conn {
+				connections[gameID] = append(conns[:i], conns[i+1:]...)
+				break
+			}
+		}
 	}
 }
