@@ -3,10 +3,22 @@ package utils
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"math/big"
 	"strconv"
 	"strings"
 )
+
+func RemoveConnection(gameID string, conn *websocket.Conn, connections map[string][]*websocket.Conn) {
+	if conns, ok := connections[gameID]; ok {
+		for i, clientConn := range conns {
+			if clientConn == conn {
+				connections[gameID] = append(conns[:i], conns[i+1:]...)
+				break
+			}
+		}
+	}
+}
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
