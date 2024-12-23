@@ -45,6 +45,14 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var roomInfo, _ = json.Marshal(Games[gameID])
+
+	err = utils.SetKey(gameID, string(roomInfo), 0)
+	if err != nil {
+		log.Println("Error setting key abort upgrade socket", err)
+		return
+	}
+
 	connections[gameID] = append(connections[gameID], conn)
 
 	defer func() {
@@ -94,12 +102,19 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
+	// if redis client not connect then exit
+	utils.InitRedisClient("localhost:6379", "", 1)
+	err := utils.PingRedis()
+	if err != nil {
+		log.Fatal("Error connecting to Redis:", err)
+		return
+	}
 	http.HandleFunc("/game", handleConnection)
 	http.HandleFunc("/create-room", services.CreateRoom(Games))
 	http.HandleFunc("/check-room", services.CheckRoom(Games))
 
 	log.Println("Starting WebSocket server on port 4296")
-	err := http.ListenAndServe(":4296", nil)
+	err = http.ListenAndServe(":4296", nil)
 	if err != nil {
 		log.Fatal("Error starting server:", err)
 	}

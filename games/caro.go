@@ -1,6 +1,7 @@
 package games
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"go-socket/types"
@@ -76,6 +77,8 @@ func joinGame(msgJSON types.GameMessage, conn *websocket.Conn, Games map[string]
 		_ = conn.WriteJSON(map[string]string{"status": "Game Start"})
 	}
 
+	var roomInfo, _ = json.Marshal(Games[msgJSON.GameID])
+	_ = utils.SetKey(msgJSON.GameID, string(roomInfo), 0)
 }
 
 func checkWin(row int, col int, grid [15][15]string, player string) bool {
@@ -183,6 +186,8 @@ func gameMove(msgJSON types.GameMessage, Games map[string]*types.Game) {
 			Games[msgJSON.GameID].PlayerTurn = "P1"
 		}
 
+		var roomInfo, _ = json.Marshal(Games[msgJSON.GameID])
+		_ = utils.SetKey(msgJSON.GameID, string(roomInfo), 0)
 	}
 }
 
@@ -212,6 +217,9 @@ func leaveGame(msgJSON types.GameMessage, Games map[string]*types.Game, conn *we
 	if Games[msgJSON.GameID].P1ID == "" && Games[msgJSON.GameID].P2ID == "" {
 		delete(Games, msgJSON.GameID)
 	}
+
+	var roomInfo, _ = json.Marshal(Games[msgJSON.GameID])
+	_ = utils.SetKey(msgJSON.GameID, string(roomInfo), 0)
 
 	_ = conn.WriteJSON(map[string]string{"Status": "Player left the game", "gameID": msgJSON.GameID, "PlayerID": msgJSON.Data.PlayerID})
 }
