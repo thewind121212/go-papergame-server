@@ -15,7 +15,8 @@ import (
 const GRID_SIZE = 225
 
 var Games = make(map[string]*types.Game)
-var connections = make(map[string][]*websocket.Conn)
+var GameChannel = make(map[string]chan bool)
+var Connections = make(map[string][]*websocket.Conn)
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -34,7 +35,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 
 	//if current socket > 2 then reject upgrade
 
-	if len(connections[gameID])+1 > 2 {
+	if len(Connections[gameID])+1 > 2 {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "Game Full"})
 		return
 	}
@@ -45,7 +46,17 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var roomInfo, _ = json.Marshal(Games[gameID])
+	//create room info
+
+	romInfo := types.GameStatus{
+		Id:            gameID,
+		CurrentPlayer: 0,
+		Player1Id:     "",
+		Player2Id:     "",
+		Status:        "Waiting for Player",
+	}
+
+	var roomInfo, _ = json.Marshal(romInfo)
 
 	err = utils.SetKey(gameID, string(roomInfo), 0)
 	if err != nil {
@@ -53,11 +64,13 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	connections[gameID] = append(connections[gameID], conn)
+	Connections[gameID] = append(Connections[gameID], conn)
+
+	GameChannel[gameID] = make(chan bool)
 
 	defer func() {
 		_ = conn.Close()
-		utils.RemoveConnection(gameID, conn, connections)
+		utils.RemoveConnection(gameID, conn, Connections)
 	}()
 
 	err = conn.WriteJSON(Games[gameID])
@@ -80,16 +93,16 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		_ = json.Unmarshal([]byte(msg), &msgJSON)
 
 		//handle msg to game
-		games.Carogame(msgJSON, conn, Games)
+		games.Carogame(msgJSON, conn, Games, Connections, GameChannel)
 
 		//send msg to all socket client in room
-		for i, clientConn := range connections[gameID] {
+		for i, clientConn := range Connections[gameID] {
 			err := clientConn.WriteJSON(Games[gameID])
 			if err != nil {
 				log.Printf("Error sending update to client %d: %v", i, err)
 				clientConn.Close()
 				// Remove the disconnected client
-				connections[gameID] = append(connections[gameID][:i], connections[gameID][i+1:]...)
+				Connections[gameID] = append(Connections[gameID][:i], Connections[gameID][i+1:]...)
 			}
 		}
 

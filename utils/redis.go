@@ -29,6 +29,10 @@ func SetKey(key string, value string, exp time.Duration) error {
 	return redisClient.Set(context.Background(), key, value, exp).Err()
 }
 
+func DelKey(key string) error {
+	return redisClient.Del(context.Background(), key).Err()
+}
+
 func GetKey(key string) (string, error) {
 	return redisClient.Get(context.Background(), key).Result()
 }

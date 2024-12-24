@@ -13,6 +13,7 @@ type Game struct {
 	IsFinished   bool
 	NextTurnTo   string
 	WinnerID     string
+	MoveToken    string
 	Winner       string
 }
 type GameMessage struct {
@@ -25,4 +26,12 @@ type DataMessage struct {
 	Name       string `json:"name"`
 	Coordinate string `json:"coordinate"`
 	PlayerID   string `json:"playerID"`
+}
+
+type GameStatus struct {
+	Id            string
+	CurrentPlayer int
+	Player1Id     string
+	Player2Id     string
+	Status        string
 }
