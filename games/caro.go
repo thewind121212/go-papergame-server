@@ -17,11 +17,11 @@ func Carogame(msgJSON types.GameMessage, conn *websocket.Conn, Games map[string]
 	case "move":
 		gameMove(msgJSON, Games)
 	case "leave":
-		leaveGame(msgJSON, Games, conn)
+		leaveGame(msgJSON, Games, conn, GameChannel, Connections)
 	case "rematch":
 		rematch(msgJSON.GameID, Games, conn)
-	case "disconnect":
-		disconnect(msgJSON, Games, Connections, GameChannel)
+	case "wait-disconnect":
+		waitForDisconnectPlayer(msgJSON, Games, GameChannel)
 	}
 
 }
@@ -69,7 +69,6 @@ func joinGame(msgJSON types.GameMessage, conn *websocket.Conn, Games map[string]
 	}
 
 	if Games[msgJSON.GameID].P1Name != "" && Games[msgJSON.GameID].P2Name != "" && Games[msgJSON.GameID].Status == "All Players Joined" {
-		go ClearTimeout(msgJSON.GameID, GameChannel)
 		Games[msgJSON.GameID].Status = "Game Initialize"
 		rows, cols := 15, 15
 		grid := make([][]string, rows)
@@ -244,7 +243,7 @@ func resetGame(GameID string, Games map[string]*types.Game) {
 	Games[GameID].WinnerID = ""
 }
 
-func leaveGame(msgJSON types.GameMessage, Games map[string]*types.Game, conn *websocket.Conn) {
+func leaveGame(msgJSON types.GameMessage, Games map[string]*types.Game, conn *websocket.Conn, GameChannel map[string]chan bool, Connections map[string][]*websocket.Conn) {
 	if Games[msgJSON.GameID].P1ID == msgJSON.Data.PlayerID {
 		Games[msgJSON.GameID].P1ID = ""
 		Games[msgJSON.GameID].P1Name = ""
@@ -255,10 +254,6 @@ func leaveGame(msgJSON types.GameMessage, Games map[string]*types.Game, conn *we
 		Games[msgJSON.GameID].P2Name = ""
 		Games[msgJSON.GameID].Status = "One Player Left"
 		resetGame(msgJSON.GameID, Games)
-	}
-
-	if Games[msgJSON.GameID].P1ID == "" && Games[msgJSON.GameID].P2ID == "" {
-		delete(Games, msgJSON.GameID)
 	}
 
 	roomInfo := types.GameStatus{
@@ -313,35 +308,21 @@ func rematch(GameID string, Games map[string]*types.Game, conn *websocket.Conn) 
 	_ = utils.SetKey(GameID, string(roomInfoJson), 0)
 }
 
-func disconnect(msgJSON types.GameMessage, Games map[string]*types.Game, Connections map[string][]*websocket.Conn, GameChannel map[string]chan bool) {
-	if Games[msgJSON.GameID].P1ID == msgJSON.Data.PlayerID {
-		Games[msgJSON.GameID].P1ID = ""
-		Games[msgJSON.GameID].P1Name = ""
-		Games[msgJSON.GameID].Status = "One Player Left"
-		resetGame(msgJSON.GameID, Games)
-	} else if Games[msgJSON.GameID].P2ID == msgJSON.Data.PlayerID {
-		Games[msgJSON.GameID].P2ID = ""
-		Games[msgJSON.GameID].P2Name = ""
-		Games[msgJSON.GameID].Status = "One Player Left"
-		resetGame(msgJSON.GameID, Games)
-	}
+func Disconnect(GameID string, Games map[string]*types.Game, Connections map[string][]*websocket.Conn, GameChannel map[string]chan bool) {
 
-	fmt.Println("run disconnect")
+	Games[GameID].Status = "One Player Disconnected"
 
-	go SetTimeout(GameChannel, msgJSON.GameID, 5*time.Second, func() {
-		delete(Games, msgJSON.GameID)
+	go SetTimeout(GameChannel, GameID, 20*time.Second, func() {
 	_:
-		utils.ClearConnections(msgJSON.GameID, Connections)
-		_ = utils.DelKey(msgJSON.GameID)
+		utils.ClearConnections(GameID, Connections)
+		_ = utils.DelKey(GameID)
+		delete(Games, GameID)
 	})
 
-	if Games[msgJSON.GameID].P1ID == "" && Games[msgJSON.GameID].P2ID == "" {
-		delete(Games, msgJSON.GameID)
-		utils.ClearConnections(msgJSON.GameID, Connections)
-	_:
-		_ = utils.DelKey(msgJSON.GameID)
-	}
+}
 
+func waitForDisconnectPlayer(msgJSON types.GameMessage, Games map[string]*types.Game, GameChannel map[string]chan bool) {
+	go ClearTimeout(msgJSON.GameID, GameChannel)
 }
 
 func SetTimeout(GameChannel map[string]chan bool, gameID string, duration time.Duration, callback func()) {

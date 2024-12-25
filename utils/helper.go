@@ -57,10 +57,17 @@ func RemoveConnection(gameID string, conn *websocket.Conn, connections map[strin
 
 func ClearConnections(gameID string, Connections map[string][]*websocket.Conn) {
 	// Check if the gameID exists in the Connections map
+
 	if conns, exists := Connections[gameID]; exists {
-		for i, conn := range conns {
+		for i, clientConn := range conns {
+			msgRoomDel := struct {
+				Status string `json:"Status"`
+			}{
+				Status: "Room Disconnected",
+			}
+			err := clientConn.WriteJSON(msgRoomDel)
 			// Close each connection
-			err := conn.Close()
+			err = clientConn.Close()
 			if err != nil {
 				log.Printf("Error closing connection %d for game %s: %v", i, gameID, err)
 			}
