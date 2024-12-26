@@ -153,6 +153,7 @@ func main() {
 	http.HandleFunc("/game", handleConnection)
 	http.HandleFunc("/create-room", services.CreateRoom(Games))
 	http.HandleFunc("/check-room", services.CheckRoom(Games))
+	http.HandleFunc("/get-all-room", services.GetAllRoom(Games))
 
 	log.Println("Starting WebSocket server on port 4296")
 	err = http.ListenAndServe(":4296", nil)
